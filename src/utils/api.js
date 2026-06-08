@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://pdf-project-back.onrender.com',
   withCredentials: true,
 });
 
