@@ -2,17 +2,19 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowLeft, Sparkles, FileText, BookOpen, BrainCircuit, GitBranch, StickyNote, Loader2, CheckCircle, Award, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Sparkles, FileText, BookOpen, BrainCircuit, GitBranch, StickyNote, MessageSquare, Loader2, CheckCircle, Award, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '../components/shared/Navbar';
 import api from '../utils/api';
 import styles from './PDFWorkspace.module.css';
 
+// ✅ ADDED CHATBOT TO FEATURES CONFIGURATION
 const FEATURES = [
   { key: 'summary', label: 'Summary', icon: <BookOpen size={20} />, desc: 'Concise overview of key concepts', color: '#a78bfa' },
   { key: 'mcq', label: 'MCQ Quiz', icon: <BrainCircuit size={20} />, desc: 'Test your understanding with questions', color: '#34d399' },
   { key: 'flowchart', label: 'Flow Diagram', icon: <GitBranch size={20} />, desc: 'Visual process & concept map', color: '#fbbf24' },
   { key: 'short_notes', label: 'Short Notes', icon: <StickyNote size={20} />, desc: 'Bullet-point revision notes', color: '#f87171' },
+  { key: 'chatbot', label: 'Document Chat', icon: <MessageSquare size={20} />, desc: 'Ask any questions about this PPT/PDF', color: '#60a5fa' },
 ];
 
 export default function PDFWorkspace() {
@@ -23,6 +25,11 @@ export default function PDFWorkspace() {
   const [activeFeature, setActiveFeature] = useState(null);
   const [generating, setGenerating] = useState({});
   const [loading, setLoading] = useState(true);
+
+  // ✅ Chatbot UI Context states
+  const [query, setQuery] = useState('');
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -53,9 +60,34 @@ export default function PDFWorkspace() {
     }
   };
 
+  // ✅ NEW CUSTOM HANDLER FOR ASKING CHAT QUESTIONS
+  const handleAskChatbot = async (e) => {
+    e.preventDefault();
+    if (!query.trim() || chatLoading) return;
+
+    const userQuestion = query.trim();
+    setQuery('');
+    setChatLoading(true);
+
+    // Immediately push user question into conversation layout view
+    setChatHistory(prev => [...prev, { role: 'user', text: userQuestion }]);
+
+    try {
+      // Backend integration endpoint: sends question and pdf context tracker
+      const res = await api.post('/pdf/generate', { pdfId, feature: 'chatbot', question: userQuestion });
+
+      setChatHistory(prev => [...prev, { role: 'bot', text: res.data.result }]);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not fetch answer');
+      setChatHistory(prev => [...prev, { role: 'bot', text: "❌ Failed to retrieve answers. Please check server connection." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
-      <div className="spinner" style={{ width:40, height:40 }} />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+      <div className="spinner" style={{ width: 40, height: 40 }} />
     </div>
   );
 
@@ -68,7 +100,7 @@ export default function PDFWorkspace() {
       <div className={styles.workspace}>
         {/* Sidebar */}
         <aside className={styles.sidebar}>
-          <button className="btn btn-ghost" onClick={() => navigate('/dashboard')} style={{ marginBottom:24 }}>
+          <button className="btn btn-ghost" onClick={() => navigate('/dashboard')} style={{ marginBottom: 24 }}>
             <ArrowLeft size={16} /> Back
           </button>
 
@@ -78,7 +110,7 @@ export default function PDFWorkspace() {
               <div>
                 <div className={styles.pdfName}>{pdf.originalName}</div>
                 <div className={styles.pdfMeta}>
-                  {new Date(pdf.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}
+                  {new Date(pdf.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </div>
               </div>
             </div>
@@ -99,7 +131,7 @@ export default function PDFWorkspace() {
                   className={`${styles.featureBtn} ${isActive ? styles.active : ''}`}
                   onClick={() => {
                     setActiveFeature(feat.key);
-                    if (!done) generate(feat.key);
+                    if (!done && feat.key !== 'chatbot') generate(feat.key);
                   }}
                   style={{ '--feat-color': feat.color }}
                 >
@@ -109,7 +141,7 @@ export default function PDFWorkspace() {
                   <div className={styles.featText}>
                     <div className={styles.featLabel}>
                       {feat.label}
-                      {done && <CheckCircle size={13} style={{ color: '#34d399' }} />}
+                      {done && feat.key !== 'chatbot' && <CheckCircle size={13} style={{ color: '#34d399' }} />}
                     </div>
                     <div className={styles.featDesc}>{feat.desc}</div>
                   </div>
@@ -127,14 +159,20 @@ export default function PDFWorkspace() {
               <h2>Choose an AI Feature</h2>
               <p>Select a feature from the sidebar to generate AI-powered content from your PDF.</p>
               <div className={styles.featureCards}>
-                {FEATURES.map(feat => (
-                  <button key={feat.key} className={styles.featureCard}
-                    onClick={() => { setActiveFeature(feat.key); if (!results[feat.key]) generate(feat.key); }}>
-                    <div style={{ color: feat.color, marginBottom:10 }}>{feat.icon}</div>
-                    <div className={styles.featCardLabel}>{feat.label}</div>
-                    <div className={styles.featCardDesc}>{feat.desc}</div>
-                  </button>
-                ))}
+                <div className={styles.featureCards}>
+                  {FEATURES.map(feat => (
+                    <button key={feat.key} className={styles.featureCard}
+                      onClick={() => {
+                        setActiveFeature(feat.key);
+                        // ✅ ADDED CHATBOT EXCLUSION HERE TO PREVENT BROKEN OVER-THE-AIR RE-GENERATION MANDATES
+                        if (!results[feat.key] && feat.key !== 'chatbot') generate(feat.key);
+                      }}>
+                      <div style={{ color: feat.color, marginBottom: 10 }}>{feat.icon}</div>
+                      <div className={styles.featCardLabel}>{feat.label}</div>
+                      <div className={styles.featCardDesc}>{feat.desc}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
@@ -144,14 +182,67 @@ export default function PDFWorkspace() {
                   {activeFeat?.icon}
                   <span>{activeFeat?.label}</span>
                 </div>
-                {results[activeFeature] && (
+                {results[activeFeature] && activeFeature !== 'chatbot' && (
                   <button className="btn btn-ghost" onClick={() => generate(activeFeature)} disabled={generating[activeFeature]}>
                     {generating[activeFeature] ? <Loader2 size={16} className={styles.spin} /> : <><Sparkles size={16} /> Regenerate</>}
                   </button>
                 )}
               </div>
 
-              {generating[activeFeature] && !results[activeFeature] ? (
+              {/* RENDER CHATBOT COMPONENT INTERFACE EXCLUSIVELY */}
+              {activeFeature === 'chatbot' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 200px)', background: '#0f172a', borderRadius: '12px', border: '1px solid #1e293b' }}>
+
+                  {/* Chat logs scroll container */}
+                  <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {chatHistory.length === 0 && (
+                      <div style={{ textAlign: 'center', color: '#64748b', marginTop: '40px' }}>
+                        <MessageSquare size={32} style={{ margin: '0 auto 12px auto', display: 'block' }} />
+                        <p style={{ fontWeight: 600, margin: 0 }}>Ask anything about this document!</p>
+                        <p style={{ fontSize: '0.85rem' }}>Example: "What is the key algorithm explained on page 3?"</p>
+                      </div>
+                    )}
+
+                    {chatHistory.map((msg, index) => (
+                      <div key={index} style={{
+                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        maxWidth: '75%',
+                        background: msg.role === 'user' ? '#3b82f6' : '#1e293b',
+                        color: '#f8fafc',
+                        borderRadius: '12px',
+                        padding: '12px 16px',
+                        border: msg.role === 'user' ? 'none' : '1px solid #334155',
+                      }}>
+                        <div className="markdown-content" style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                        </div>
+                      </div>
+                    ))}
+
+                    {chatLoading && (
+                      <div style={{ alignSelf: 'flex-start', background: '#1e293b', borderRadius: '12px', padding: '12px 16px', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
+                        <Loader2 size={16} className={styles.spin} />
+                        <span style={{ fontSize: '0.9rem' }}>Thinking...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input form panel field */}
+                  <form onSubmit={handleAskChatbot} style={{ padding: '16px', borderTop: '1px solid #1e293b', display: 'flex', gap: '10px', background: '#111827', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+                    <input
+                      type="text"
+                      placeholder="Ask a question about the presentation slides..."
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      disabled={chatLoading}
+                      style={{ flex: 1, background: '#1f2937', border: '1px solid #374151', borderRadius: '8px', padding: '12px 16px', color: '#f3f4f6', outline: 'none', fontSize: '0.95rem' }}
+                    />
+                    <button type="submit" disabled={chatLoading || !query.trim()} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', width: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'opacity 0.2s' }}>
+                      <Send size={18} />
+                    </button>
+                  </form>
+                </div>
+              ) : generating[activeFeature] && !results[activeFeature] ? (
                 <div className={styles.generating}>
                   <div className={styles.genAnim}>
                     <div className={styles.pulse} style={{ background: activeFeat?.color }} />
@@ -197,14 +288,13 @@ function InteractiveQuiz({ rawJsonData }) {
 
   useEffect(() => {
     try {
-      // Clean up the JSON if the model returns wrapped markdown code blocks
       let cleanData = rawJsonData.trim();
       if (cleanData.startsWith('```json')) {
         cleanData = cleanData.replace(/^```json/, '').replace(/```$/, '').trim();
       } else if (cleanData.startsWith('```')) {
         cleanData = cleanData.replace(/^```/, '').replace(/```$/, '').trim();
       }
-      
+
       const parsed = JSON.parse(cleanData);
       setQuestions(Array.isArray(parsed) ? parsed : []);
       setParseError(false);
@@ -212,7 +302,6 @@ function InteractiveQuiz({ rawJsonData }) {
       console.error("Failed parsing MCQ output data:", e);
       setParseError(true);
     }
-    // Reset status on content update/regeneration
     setSelectedAnswers({});
     setSubmitted(false);
     setScore(0);
@@ -220,7 +309,7 @@ function InteractiveQuiz({ rawJsonData }) {
 
   const handleSelect = (qId, optionIdx) => {
     if (submitted) return;
-    const optionLetter = String.fromCharCode(65 + optionIdx); // Converts 0->A, 1->B, etc.
+    const optionLetter = String.fromCharCode(65 + optionIdx);
     setSelectedAnswers(prev => ({ ...prev, [qId]: optionLetter }));
   };
 
@@ -269,14 +358,13 @@ function InteractiveQuiz({ rawJsonData }) {
                 const isSelected = userAnswer === currentLetter;
                 const isCorrectAnswer = q.correctAnswer === currentLetter;
 
-                // Base style variables
                 let bg = '#111827';
                 let border = '1px solid #475569';
                 let cursor = 'pointer';
 
                 if (!submitted) {
                   if (isSelected) {
-                    bg = '#1e1b4b'; 
+                    bg = '#1e1b4b';
                     border = '2px solid #6366f1';
                   }
                 } else {
@@ -336,7 +424,6 @@ function InteractiveQuiz({ rawJsonData }) {
         );
       })}
 
-      {/* Dynamic Action Bar */}
       {!submitted ? (
         <button
           onClick={handleSubmit}

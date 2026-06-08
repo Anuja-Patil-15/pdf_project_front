@@ -21,6 +21,7 @@ export default function UserDashboard() {
   const [history, setHistory] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef();
   const navigate = useNavigate();
 
@@ -39,7 +40,6 @@ export default function UserDashboard() {
     const file = e.target.files[0];
     if (!file) return;
     if (file.type !== 'application/pdf') { toast.error('Only PDF files allowed'); return; }
-
     const fd = new FormData();
     fd.append('pdf', file);
     setUploading(true);
@@ -56,9 +56,20 @@ export default function UserDashboard() {
     }
   };
 
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const syntheticEvent = { target: { files: [file] } };
+      handleUpload(syntheticEvent);
+    }
+  };
+
   if (loading) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh' }}>
-      <div className="spinner" style={{ width:40, height:40 }} />
+    <div className={styles.loadingScreen}>
+      <div className={styles.loadingOrb} />
+      <p className={styles.loadingText}>Loading your workspace…</p>
     </div>
   );
 
@@ -66,42 +77,59 @@ export default function UserDashboard() {
     <div className={styles.page}>
       <Navbar />
       <main className={styles.main}>
-        {/* Hero upload */}
+
+        {/* ── HERO ── */}
         <section className={styles.hero}>
           <div className={styles.heroText}>
-            <div className="badge badge-purple" style={{ marginBottom:16 }}>
-              <Zap size={12} /> AI-Powered Notes
+            <div className={styles.heroBadge}>
+              <Zap size={11} />
+              <span>AI-Powered Notes</span>
             </div>
-            <h1>Upload your PDF notes,<br />let AI do the rest</h1>
-            <p>Get summaries, MCQs, flow diagrams, and concise study notes powered by Claude AI.</p>
+            <h1 className={styles.heroHeading}>
+              Upload your PDF notes,<br />
+              <span className={styles.heroAccent}>let AI do the rest</span>
+            </h1>
+            <p className={styles.heroSub}>
+              Get summaries, MCQs, flow diagrams, and concise study notes powered by Claude AI.
+            </p>
           </div>
-          <div className={styles.uploadBox} onClick={() => !uploading && fileRef.current?.click()}>
-            <input ref={fileRef} type="file" accept=".pdf" style={{ display:'none' }} onChange={handleUpload} />
+
+          <div
+            className={`${styles.uploadBox} ${dragOver ? styles.uploadBoxDrag : ''} ${uploading ? styles.uploadBoxUploading : ''}`}
+            onClick={() => !uploading && fileRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+          >
+            <input ref={fileRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleUpload} />
             {uploading ? (
-              <>
-                <div className="spinner" style={{ width:40, height:40, margin:'0 auto 16px' }} />
-                <p>Uploading & extracting text...</p>
-              </>
+              <div className={styles.uploadingState}>
+                <div className={styles.uploadSpinner} />
+                <p className={styles.uploadingText}>Uploading &amp; extracting text…</p>
+                <p className={styles.uploadingSub}>This will just take a moment</p>
+              </div>
             ) : (
-              <>
-                <div className={styles.uploadIcon}><Upload size={32} /></div>
-                <p className={styles.uploadTitle}>Drop PDF here or click to upload</p>
-                <p className={styles.uploadSub}>Max 10MB • PDF only</p>
-              </>
+              <div className={styles.uploadIdleState}>
+                <div className={styles.uploadIconWrap}>
+                  <Upload size={26} />
+                </div>
+                <p className={styles.uploadTitle}>Drop PDF here or <span className={styles.uploadLink}>browse</span></p>
+                <p className={styles.uploadSub}>Max 10 MB · PDF only</p>
+              </div>
             )}
           </div>
         </section>
 
-        {/* Stats row */}
+        {/* ── STATS ── */}
         <section className={styles.stats}>
           {[
-            { icon: <FileText size={20} />, label: 'PDFs Uploaded', value: pdfs.length },
-            { icon: <Layers size={20} />, label: 'AI Results', value: history.length },
-            { icon: <Clock size={20} />, label: 'Last Upload', value: pdfs[0] ? formatDate(pdfs[0].createdAt) : '—' },
+            { icon: <FileText size={18} />, label: 'PDFs Uploaded', value: pdfs.length },
+            { icon: <Layers size={18} />, label: 'AI Results', value: history.length },
+            { icon: <Clock size={18} />, label: 'Last Upload', value: pdfs[0] ? formatDate(pdfs[0].createdAt) : '—' },
           ].map((s, i) => (
-            <div key={i} className={`card ${styles.statCard}`}>
+            <div key={i} className={styles.statCard}>
               <div className={styles.statIcon}>{s.icon}</div>
-              <div>
+              <div className={styles.statBody}>
                 <div className={styles.statValue}>{s.value}</div>
                 <div className={styles.statLabel}>{s.label}</div>
               </div>
@@ -109,25 +137,27 @@ export default function UserDashboard() {
           ))}
         </section>
 
+        {/* ── GRID ── */}
         <div className={styles.grid}>
-          {/* PDFs list */}
-          <section>
+
+          {/* PDFs */}
+          <section className={styles.panel}>
             <h2 className={styles.sectionTitle}>Your PDFs</h2>
             {pdfs.length === 0 ? (
-              <div className={`card ${styles.empty}`}>
-                <FileText size={40} color="var(--text-3)" />
+              <div className={styles.empty}>
+                <FileText size={36} />
                 <p>No PDFs yet. Upload your first one above!</p>
               </div>
             ) : (
-              <div className={styles.pdfList}>
+              <div className={styles.list}>
                 {pdfs.map(pdf => (
-                  <div key={pdf.id} className={`card ${styles.pdfCard}`} onClick={() => navigate(`/workspace/${pdf.id}`)}>
-                    <div className={styles.pdfIcon}><FileText size={22} /></div>
+                  <div key={pdf.id} className={styles.pdfCard} onClick={() => navigate(`/workspace/${pdf.id}`)}>
+                    <div className={styles.pdfIcon}><FileText size={18} /></div>
                     <div className={styles.pdfInfo}>
                       <div className={styles.pdfName}>{pdf.originalName}</div>
-                      <div className={styles.pdfMeta}>{formatDate(pdf.createdAt)} • {formatSize(pdf.fileSize)}</div>
+                      <div className={styles.pdfMeta}>{formatDate(pdf.createdAt)} · {formatSize(pdf.fileSize)}</div>
                     </div>
-                    <ChevronRight size={18} color="var(--text-3)" />
+                    <ChevronRight size={16} className={styles.pdfArrow} />
                   </div>
                 ))}
               </div>
@@ -135,34 +165,35 @@ export default function UserDashboard() {
           </section>
 
           {/* History */}
-          <section>
+          <section className={styles.panel}>
             <h2 className={styles.sectionTitle}>Recent AI Results</h2>
             {history.length === 0 ? (
-              <div className={`card ${styles.empty}`}>
-                <AlertCircle size={40} color="var(--text-3)" />
+              <div className={styles.empty}>
+                <AlertCircle size={36} />
                 <p>No AI results yet. Open a PDF workspace and generate content.</p>
               </div>
             ) : (
-              <div className={styles.historyList}>
+              <div className={styles.list}>
                 {history.slice(0, 10).map(item => {
                   const feat = FEATURE_LABELS[item.feature] || { label: item.feature, color: 'badge-purple' };
                   return (
-                    <div key={item.id} className={`card ${styles.historyCard}`}
-                      onClick={() => navigate(`/workspace/${item.pdfId}`)}>
+                    <div key={item.id} className={styles.historyCard} onClick={() => navigate(`/workspace/${item.pdfId}`)}>
                       <div className={styles.historyTop}>
                         <span className={`badge ${feat.color}`}>{feat.label}</span>
                         <span className={styles.historyDate}>{formatDate(item.createdAt)}</span>
                       </div>
                       <div className={styles.historyFile}>
-                        <FileText size={13} /> {item.originalName}
+                        <FileText size={12} />
+                        <span>{item.originalName}</span>
                       </div>
-                      <p className={styles.historyPreview}>{item.result?.substring(0, 120)}...</p>
+                      <p className={styles.historyPreview}>{item.result?.substring(0, 120)}…</p>
                     </div>
                   );
                 })}
               </div>
             )}
           </section>
+
         </div>
       </main>
     </div>
