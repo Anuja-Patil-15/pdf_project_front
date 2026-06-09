@@ -61,10 +61,7 @@ export default function LoginPage() {
         <p className={styles.switch}>
           Don't have an account? <Link to="/register">Create one</Link>
         </p>
-        <div className={styles.demo}>
-          <span>Demo credentials:</span>
-          <code>admin@demo.com / admin123</code>
-        </div>
+        
       </div>
     </div>
   );
